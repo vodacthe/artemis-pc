@@ -28,6 +28,9 @@ on:
       - 'fix/**'
   workflow_dispatch:  # Allow manual triggering
 
+permissions:
+  contents: write
+
 env:
   QT_VERSION: '6.8.3'
 
@@ -1635,6 +1638,8 @@ jobs:
     name: Create Development Release
     needs: [setup-version, build-windows-x64-portable, build-windows-arm64-portable, build-windows-universal-installer, build-macos-dev, build-linux-dev, build-flatpak-dev, build-raspberry-pi-dev]
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     if: (github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') && needs.setup-version.outputs.should_build == 'true'  # Create releases for develop/main branches when builds ran
     
     steps:
@@ -1642,6 +1647,7 @@ jobs:
       uses: actions/checkout@v4
       with:
         fetch-depth: 0  # Need full history for changelog
+        token: ${{ secrets.GITHUB_TOKEN }}
     
     - name: Display release version info
       run: |
@@ -1652,8 +1658,8 @@ jobs:
       run: |
         git config user.name "github-actions[bot]"
         git config user.email "github-actions[bot]@users.noreply.github.com"
-        git tag ${{ needs.setup-version.outputs.version }}
-        git push origin ${{ needs.setup-version.outputs.version }}
+        git tag -f ${{ needs.setup-version.outputs.version }}
+        git push origin ${{ needs.setup-version.outputs.version }} --force
 
     - name: Generate Changelog
       id: changelog
