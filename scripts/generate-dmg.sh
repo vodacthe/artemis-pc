@@ -33,16 +33,39 @@ fi
 
 [ "$SIGNING_IDENTITY" == "" ] || git diff-index --quiet HEAD -- || fail "Signed release builds must not have unstaged changes!"
 
+# Locate tools
+QMAKE_CMD="qmake"
+command -v qmake6 >/dev/null 2>&1 && QMAKE_CMD="qmake6"
+
+MOC_CMD="moc"
+if [ -n "$Qt6_DIR" ] && [ -x "$Qt6_DIR/libexec/moc" ]; then
+  MOC_CMD="$Qt6_DIR/libexec/moc"
+elif [ -n "$Qt6_DIR" ] && [ -x "$Qt6_DIR/bin/moc" ]; then
+  MOC_CMD="$Qt6_DIR/bin/moc"
+elif command -v moc-qt6 >/dev/null 2>&1; then
+  MOC_CMD="moc-qt6"
+fi
+
+MACDEPLOYQT_CMD="macdeployqt"
+if [ -n "$Qt6_DIR" ] && [ -x "$Qt6_DIR/bin/macdeployqt" ]; then
+  MACDEPLOYQT_CMD="$Qt6_DIR/bin/macdeployqt"
+fi
+
+echo Pre-generating inline MOC files
+"$MOC_CMD" "$SOURCE_ROOT/app/backend/computermanager.cpp" -o "$SOURCE_ROOT/app/backend/computermanager.moc" || true
+"$MOC_CMD" "$SOURCE_ROOT/app/backend/boxartmanager.cpp" -o "$SOURCE_ROOT/app/backend/boxartmanager.moc" || true
+"$MOC_CMD" "$SOURCE_ROOT/app/gui/computermodel.cpp" -o "$SOURCE_ROOT/app/gui/computermodel.moc" || true
+
 echo Cleaning output directories
 rm -rf $BUILD_FOLDER
 rm -rf $INSTALLER_FOLDER
-mkdir $BUILD_ROOT
-mkdir $BUILD_FOLDER
-mkdir $INSTALLER_FOLDER
+mkdir -p $BUILD_ROOT
+mkdir -p $BUILD_FOLDER
+mkdir -p $INSTALLER_FOLDER
 
 echo Configuring the project
 pushd $BUILD_FOLDER
-qmake $SOURCE_ROOT/artemis.pro QMAKE_APPLE_DEVICE_ARCHS="x86_64 arm64" || fail "Qmake failed!"
+$QMAKE_CMD $SOURCE_ROOT/artemis.pro CONFIG+=release CONFIG+=sdk_no_version_check QMAKE_MACOSX_DEPLOYMENT_TARGET=14.0 QMAKE_APPLE_DEVICE_ARCHS="x86_64 arm64" || fail "Qmake failed!"
 popd
 
 echo Compiling Artemis in $BUILD_CONFIG configuration
@@ -60,8 +83,7 @@ echo Creating app bundle
 EXTRA_ARGS=
 if [ "$BUILD_CONFIG" == "Debug" ]; then EXTRA_ARGS="$EXTRA_ARGS -use-debug-libs"; fi
 echo Extra deployment arguments: $EXTRA_ARGS
-macdeployqt $BUILD_FOLDER/app/Artemis.app $EXTRA_ARGS -qmldir=$SOURCE_ROOT/app/gui -appstore-compliant || fail "macdeployqt failed!"
-
+$MACDEPLOYQT_CMD $BUILD_FOLDER/app/Artemis.app $EXTRA_ARGS -qmldir=$SOURCE_ROOT/app/gui -appstore-compliant || fail "macdeployqt failed!"
 echo Removing dSYM files from app bundle
 find $BUILD_FOLDER/app/Artemis.app/ -name '*.dSYM' | xargs rm -rf
 

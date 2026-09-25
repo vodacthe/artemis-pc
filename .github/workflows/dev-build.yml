@@ -391,12 +391,16 @@ jobs:
       run: |
         # Find and set up Qt ARM64 environment
         echo "Setting up Qt ARM64 environment..."
-        $qtArm64Path = "D:\a\artemis\Qt\6.8.3\msvc2022_arm64"
+        $qtArm64Path = Join-Path $env:RUNNER_WORKSPACE "Qt\6.8.3\msvc2022_arm64"
+        if (-not (Test-Path $qtArm64Path)) {
+          $found = Get-ChildItem -Path "$env:RUNNER_WORKSPACE\Qt" -Filter "msvc2022_arm64" -Recurse -Directory -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($found) { $qtArm64Path = $found.FullName }
+        }
         
         if (-not (Test-Path $qtArm64Path)) {
           echo "ERROR: Qt ARM64 not found at expected path: $qtArm64Path"
           echo "Available Qt installations:"
-          Get-ChildItem "D:\a\artemis\Qt\6.8.3" -ErrorAction SilentlyContinue | Select-Object Name
+          Get-ChildItem "$env:RUNNER_WORKSPACE\Qt" -Recurse -Depth 2 -ErrorAction SilentlyContinue | Select-Object FullName
           exit 1
         }
         
@@ -552,7 +556,11 @@ jobs:
         SEMANTIC_VERSION: ${{ needs.setup-version.outputs.version }}
       run: |
         # Set up Qt ARM64 environment
-        $qtArm64Path = "D:\a\artemis\Qt\6.8.3\msvc2022_arm64"
+        $qtArm64Path = Join-Path $env:RUNNER_WORKSPACE "Qt\6.8.3\msvc2022_arm64"
+        if (-not (Test-Path $qtArm64Path)) {
+          $found = Get-ChildItem -Path "$env:RUNNER_WORKSPACE\Qt" -Filter "msvc2022_arm64" -Recurse -Directory -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($found) { $qtArm64Path = $found.FullName }
+        }
         $env:Qt6_DIR = $qtArm64Path
         $env:PATH = "$qtArm64Path\bin;$env:PATH"
         
@@ -693,68 +701,17 @@ jobs:
         rm -rf app/Makefile* app/.qmake.stash
         rm -rf app/debug app/release
     
-    - name: Build
+    - name: Pre-generate MOC files
       run: |
-        export PATH="$Qt6_DIR/bin:$PATH"
-        export QMAKE="$Qt6_DIR/bin/qmake6"
-        export MACOSX_DEPLOYMENT_TARGET=14.0
+        export PATH="$Qt6_DIR/bin:$Qt6_DIR/libexec:$PATH"
+        MOC_CMD="$Qt6_DIR/libexec/moc"
+        [ -x "$MOC_CMD" ] || MOC_CMD="$Qt6_DIR/bin/moc"
+        [ -x "$MOC_CMD" ] || MOC_CMD="moc"
         
-        # Force a complete clean build to ensure MOC files are generated
-        make clean || true
-        qmake6 artemis.pro CONFIG+=release CONFIG+=sdk_no_version_check QMAKE_MACOSX_DEPLOYMENT_TARGET=14.0
-        
-        # Generate MOC files explicitly and ensure they're created before building
-        make -j$(sysctl -n hw.ncpu) qmake_all
-        
-        # Force generation of specific problematic MOC files first
-        cd app
-        if [ -f Makefile.Release ]; then
-          # Generate MOC headers explicitly
-          make -f Makefile.Release compiler_moc_header_make_all || echo "MOC header generation completed"
-          # Generate MOC source files explicitly  
-          make -f Makefile.Release compiler_moc_source_make_all || echo "MOC source generation completed"
-          
-          # Verify critical MOC files exist, generate manually if needed
-          # Generate into the source folder so #include "*.moc" resolves relative to the .cpp file
-          if [ ! -f backend/computermanager.moc ]; then
-            echo "Manually generating backend/computermanager.moc"
-            "$Qt6_DIR/libexec/moc" backend/computermanager.cpp -o backend/computermanager.moc
-          fi
-          if [ ! -f backend/boxartmanager.moc ]; then
-            echo "Manually generating backend/boxartmanager.moc"
-            "$Qt6_DIR/libexec/moc" backend/boxartmanager.cpp -o backend/boxartmanager.moc
-          fi
-          if [ ! -f gui/computermodel.moc ]; then
-            echo "Manually generating gui/computermodel.moc"
-            "$Qt6_DIR/libexec/moc" gui/computermodel.cpp -o gui/computermodel.moc
-          fi
-        fi
-        
-        # Clean and rebuild all subprojects with consistent deployment target
-        cd ..
-        make clean || true
-        
-        # Build each subproject individually with deployment target
-        for subdir in moonlight-common-c qmdnsengine h264bitstream soundio; do
-          if [ -d "$subdir" ]; then
-            echo "Building $subdir with deployment target..."
-            cd "$subdir"
-            make clean || true
-            qmake6 *.pro CONFIG+=release QMAKE_MACOSX_DEPLOYMENT_TARGET=14.0
-            make -j$(sysctl -n hw.ncpu)
-            cd ..
-          fi
-        done
-        
-        # Build app sub-project to ensure .moc is picked up correctly
-        cd app
-        qmake6 app.pro CONFIG+=release QMAKE_MACOSX_DEPLOYMENT_TARGET=14.0
-        make -j$(sysctl -n hw.ncpu) release
-        cd ..
-        
-        # Final build
-        qmake6 artemis.pro CONFIG+=release CONFIG+=sdk_no_version_check QMAKE_MACOSX_DEPLOYMENT_TARGET=14.0
-        make -j$(sysctl -n hw.ncpu)
+        echo "Pre-generating MOC files using $MOC_CMD..."
+        "$MOC_CMD" app/backend/computermanager.cpp -o app/backend/computermanager.moc || true
+        "$MOC_CMD" app/backend/boxartmanager.cpp -o app/backend/boxartmanager.moc || true
+        "$MOC_CMD" app/gui/computermodel.cpp -o app/gui/computermodel.moc || true
     
     - name: Package macOS Development Build
       env:

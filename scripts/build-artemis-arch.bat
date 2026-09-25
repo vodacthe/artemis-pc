@@ -1,6 +1,10 @@
 @echo off
 setlocal enableDelayedExpansion
 
+rem Clean quotes from PATH and ensure 7-Zip is in PATH
+set "PATH=%PATH:"=%"
+if exist "C:\Program Files\7-Zip" set "PATH=%PATH%;C:\Program Files\7-Zip"
+
 echo DEBUG: SCRIPT START - build-artemis-arch.bat called with parameters: %*
 echo DEBUG: SCRIPT START - Current time: %date% %time%
 echo DEBUG: SCRIPT START - Current directory: %cd%
