@@ -1,75 +1,186 @@
-# Qt build artifacts
+# ====================================================================
+# Artemis Project .gitignore
+# ====================================================================
+
+# --------------------------------------------------------------------
+# Flatpak build artifacts
+# --------------------------------------------------------------------
+.flatpak-builder/
+build-dir/
+repo/
+*.flatpak
+*.flatpakrepo
+*.flatpakref
+
+# --------------------------------------------------------------------
+# Build directories & outputs
+# --------------------------------------------------------------------
+build/
+build-*/
+_build/
+release/
+debug/
+out/
+bin/
+
+# --------------------------------------------------------------------
+# Qt & C++ build artifacts
+# --------------------------------------------------------------------
 Makefile*
 *.o
+*.obj
 *.a
+*.so
+*.so.*
+*.dylib
+*.dll
+*.lib
+*.la
+*.lai
 *.app/
+!app/Moonlight.app/
 .qmake.cache
 .qmake.stash
 moc_*.cpp
 moc_*.h
 qrc_*.cpp
 ui_*.h
+ui_*.cpp
 *.pro.user*
-
-# Build directories
-build/
-release/
-debug/
-
-# Platform specific
-*.dmg
-*.exe
-*.deb
-*.rpm
-*.AppImage
-*.zip
-*.tar.gz
-
-# Qt Creator
-*.pro.user
-*.autosave
-
-# IDE files
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# macOS
-.DS_Store
-*.dSYM/
-
-# Windows
-Thumbs.db
-*.pdb
-
-# Logs
-*.log
-
-# Dependencies
-node_modules/
+*.qm
+*.gch
+*.pch
 
 # Generated QML cache
 *qmlcache*
+*.qmlc
+*.jsc
+!app/qml_qmlcache.qrc
 
 # Config tests
 config.tests/*/.qmake.stash
 config.tests/*/Makefile
+config.tests/*/*.o
+config.tests/*/*.a
+config.tests/*/*.so
 
-# Visual Studio
+# --------------------------------------------------------------------
+# CMake / Meson / Ninja
+# --------------------------------------------------------------------
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+CMakeScripts/
+compile_commands.json
+.ninja_deps
+.ninja_log
+build.ninja
+meson-logs/
+meson-private/
+meson-info/
+
+# --------------------------------------------------------------------
+# Packaging & Installers
+# --------------------------------------------------------------------
+*.dmg
+*.pkg
+*.exe
+!scripts/jom.exe
+!scripts/vswhere.exe
+*.msi
+*.msm
+*.msp
+*.deb
+*.rpm
+*.snap
+*.AppImage
+squashfs-root/
+AppDir/
+*.zip
+*.tar.gz
+*.tar.xz
+*.tar.bz2
+*.7z
+
+# WiX Toolset
+*.wixobj
+*.wixpdb
+
+# --------------------------------------------------------------------
+# IDE & Editor files
+# --------------------------------------------------------------------
+# Qt Creator
+*.pro.user
+*.autosave
+
+# Visual Studio / VS Code
 **/.vs/
-*.a
-*.o
+.vscode/
+*.VC.db
+*.opensdf
+*.opendb
+*.sdf
+*.suo
+*.user
+*.userosv
+*.sln.docstates
+
+# JetBrains / CLion
+.idea/
+cmake-build-*/
+*.iml
+
+# Common editor backups
+*.swp
+*.swo
+*~
+.#*
+\#*\#
+
+# --------------------------------------------------------------------
+# OS-specific files
+# --------------------------------------------------------------------
+# macOS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+*.dSYM/
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# --------------------------------------------------------------------
+# Debug symbols, logs & crash dumps
+# --------------------------------------------------------------------
+*.pdb
+*.idb
+*.ilk
+*.log
 config.log
-Makefile*
-release/
-debug/
+core
+*.core
+vgcore.*
+*.dmp
+*.crash
+
+# --------------------------------------------------------------------
+# Python
+# --------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.venv/
+venv/
+env/
+
+# --------------------------------------------------------------------
+# Submodules & Dependencies
+# --------------------------------------------------------------------
+node_modules/
 h264bitstream/h264bitstream
 moonlight-common-c/moonlight-common-c
-*.a
-config.log
-**/qml_qmlcache.qrc
-*.a
-config.log
-**/qml_qmlcache.qrc

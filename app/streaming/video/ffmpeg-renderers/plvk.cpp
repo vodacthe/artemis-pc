@@ -551,6 +551,9 @@ bool PlVkRenderer::initialize(PDECODER_PARAMETERS params)
         hwDeviceContext->user_opaque = this; // Used by lockQueue()/unlockQueue()
 
         auto vkDeviceContext = (AVVulkanDeviceContext*)((AVHWDeviceContext *)m_HwDeviceCtx->data)->hwctx;
+#if LIBAVUTIL_VERSION_INT >= AV_VERSION_INT(58, 0, 0)
+        vkDeviceContext->get_proc_addr = m_PlVkInstance->get_proc_addr;
+#endif
         vkDeviceContext->inst = m_PlVkInstance->instance;
         vkDeviceContext->phys_dev = m_Vulkan->phys_device;
         vkDeviceContext->act_dev = m_Vulkan->device;

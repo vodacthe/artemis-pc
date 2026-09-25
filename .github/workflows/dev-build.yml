@@ -1546,45 +1546,20 @@ jobs:
           - --socket=pulseaudio
           - --share=network
           - --filesystem=home
-          # GPU and hardware acceleration access (critical for Steam Deck and desktop)
-          - --device=dri
-          # Enable access to host graphics drivers (Mesa, NVIDIA, etc.)
-          - --filesystem=host-os
-          - --filesystem=/usr/share/drirc.d:ro
-          # Allow access to VA-API and VDPAU hardware decode libraries
-          - --env=LIBVA_DRIVERS_PATH=/run/host/usr/lib/x86_64-linux-gnu/dri:/run/host/usr/lib/dri:/usr/lib/x86_64-linux-gnu/dri
-          - --env=VDPAU_DRIVER_PATH=/run/host/usr/lib/x86_64-linux-gnu/vdpau:/run/host/usr/lib/vdpau:/usr/lib/x86_64-linux-gnu/vdpau
-        add-extensions:
-          # Mount host GL/Vulkan drivers from the Freedesktop runtime
-          org.freedesktop.Platform.GL.default:
-            version: '23.08'
-            directory: gl-default
-            subdirectories: true
-            no-autodownload: true
-            autodelete: false
-            add-ld-path: lib
-          org.freedesktop.Platform.GL.nvidia:
-            version: '23.08'
-            directory: gl-nvidia
-            subdirectories: true
-            no-autodownload: true
-            autodelete: false
-            add-ld-path: lib
-          # Mount host VA-API drivers for hardware video decode
-          org.freedesktop.Platform.VAAPI.Intel:
-            version: '23.08'
-            directory: vaapi-intel
-            subdirectories: true
-            no-autodownload: true
-            autodelete: false
-            add-ld-path: lib
-          org.freedesktop.Platform.VAAPI.AMD:
-            version: '23.08'
-            directory: vaapi-amd
-            subdirectories: true
-            no-autodownload: true
-            autodelete: false
-            add-ld-path: lib
+          # Full GPU and hardware acceleration access (Intel, AMD, NVIDIA)
+          - --device=all
+          # Clean environment for VA-API and VDPAU so Flatpak runtime drivers are used
+          - --env=LIBVA_DRIVER_NAME=
+          - --unset-env=LIBVA_DRIVER_NAME
+          - --env=LIBVA_DRIVERS_PATH=
+          - --unset-env=LIBVA_DRIVERS_PATH
+          - --env=VDPAU_DRIVER_PATH=
+          - --unset-env=VDPAU_DRIVER_PATH
+          # Gamescope & screensaver support
+          - --talk-name=org.freedesktop.ScreenSaver
+          - --filesystem=xdg-run/gamescope-0
+          - --filesystem=host-os:ro
+
         modules:
           - name: opus
             sources:
@@ -1603,6 +1578,17 @@ jobs:
               - type: archive
                 url: https://github.com/libsdl-org/SDL_ttf/releases/download/release-2.20.2/SDL2_ttf-2.20.2.tar.gz
                 sha256: 9dc71ed93487521b107a2c4a9ca6bf43fb62f6bddd5c26b055e6b91418a22053
+          
+          # NVIDIA NVDEC/NVENC support (headers)
+          - name: nv-codec-headers
+            buildsystem: simple
+            build-commands:
+              - make -j$(nproc)
+              - make PREFIX=/app install
+            sources:
+              - type: git
+                url: https://github.com/FFmpeg/nv-codec-headers.git
+                branch: master
           
           # Build libplacebo from source for Vulkan/HDR support (critical for Steam Deck)
           - name: libplacebo
@@ -1676,21 +1662,39 @@ jobs:
                     branch: main
                     dest: third_party/spirv-tools/external/spirv-headers
           
+          # Custom FFmpeg with CUDA/NVDEC/NVENC, VAAPI, VDPAU, Vulkan, and libplacebo
+          - name: ffmpeg
+            buildsystem: simple
+            build-commands:
+              - export PKG_CONFIG_PATH=/app/lib/pkgconfig:${PKG_CONFIG_PATH}
+              - |
+                ./configure \
+                  --prefix=/app \
+                  --enable-shared --disable-static \
+                  --disable-debug \
+                  --enable-gpl --enable-nonfree \
+                  --enable-libdrm --enable-vaapi --enable-vdpau \
+                  --enable-nvenc --enable-nvdec --enable-cuvid \
+                  --enable-vulkan --enable-libplacebo
+              - make -j$(nproc)
+              - make install
+            sources:
+              - type: git
+                url: https://github.com/FFmpeg/FFmpeg.git
+                branch: release/6.1
+
           - name: artemis-desktop-dev
             buildsystem: simple
             build-commands:
               - install -d /app/lib/GL # Workaround for NVIDIA driver issue
-              # Create extension mount directories for hardware acceleration
-              - install -d /app/lib/gl-default
-              - install -d /app/lib/gl-nvidia
-              - install -d /app/lib/vaapi-intel
-              - install -d /app/lib/vaapi-amd
               - rm -f .qmake.stash .qmake.cache
               - find . -name "Makefile*" -delete || true
               - rm -rf AntiHooking/ || true
               - rm -rf config.tests/SL/ || true
               - rm -f app/test_*.cpp || true
-              - qmake6 artemis.pro CONFIG+=release "QMAKE_CXXFLAGS+=-fPIC"
+              # Ensure our pkg-config entries (ffnvcodec, ffmpeg libs) are found first
+              - export PKG_CONFIG_PATH=/app/lib/pkgconfig:${PKG_CONFIG_PATH}
+              - qmake6 artemis.pro CONFIG+=release "QMAKE_CXXFLAGS+=-fPIC" "QMAKE_RPATHDIR=/app/lib"
               - make -j$(nproc)
               - install -Dm755 app/artemis /app/bin/artemis-dev
             sources:
@@ -1723,7 +1727,8 @@ jobs:
         VERSION: ${{ needs.setup-version.outputs.version }}
       run: |
         flatpak-builder --force-clean --repo=repo build-dir com.artemisdesktop.ArtemisDesktopDev.yml
-        flatpak build-bundle repo artemis-flatpak-$VERSION.flatpak com.artemisdesktop.ArtemisDesktopDev
+        # Build a bundle that embeds Flathub as the runtime repo so runtime + GPU extensions auto-install
+        flatpak build-bundle --runtime-repo=https://flathub.org/repo/flathub.flatpakrepo repo artemis-flatpak-$VERSION.flatpak com.artemisdesktop.ArtemisDesktopDev
     
     - name: Upload Flatpak Development Artifacts
       uses: actions/upload-artifact@v4
