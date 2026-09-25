@@ -65,7 +65,14 @@ mkdir -p $INSTALLER_FOLDER
 
 echo Configuring the project
 pushd $BUILD_FOLDER
-$QMAKE_CMD $SOURCE_ROOT/artemis.pro CONFIG+=release CONFIG+=sdk_no_version_check QMAKE_MACOSX_DEPLOYMENT_TARGET=14.0 QMAKE_APPLE_DEVICE_ARCHS="x86_64 arm64" || fail "Qmake failed!"
+$QMAKE_CMD "$SOURCE_ROOT/artemis.pro" \
+  CONFIG+=release \
+  CONFIG+=sdk_no_version_check \
+  QMAKE_MACOSX_DEPLOYMENT_TARGET=14.0 \
+  QMAKE_APPLE_DEVICE_ARCHS="x86_64 arm64" \
+  QMAKE_CXXFLAGS+="-Wno-implicit-function-declaration -Wno-error=implicit-function-declaration" \
+  QMAKE_CFLAGS+="-Wno-implicit-function-declaration -Wno-error=implicit-function-declaration" \
+  || fail "Qmake failed!"
 popd
 
 echo Compiling Artemis in $BUILD_CONFIG configuration

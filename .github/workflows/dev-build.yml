@@ -507,17 +507,22 @@ jobs:
     
     - name: Setup build environment
       run: |
-        # Install .NET SDK first (required for WiX v5)
-        choco install dotnet-sdk -y
+        # Install .NET SDK only if not already available
+        if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) {
+          Write-Host "Installing .NET SDK..."
+          choco install dotnet-sdk -y --no-progress
+        }
         
-        # Install WiX Toolset v5 as a .NET tool (recommended approach for v5)
+        # Install WiX Toolset v5 as a .NET tool
         dotnet tool install --global wix --version 5.0.1
         
-        # Verify installation
+        # Make global .NET tools available
+        $env:PATH = "$env:USERPROFILE\.dotnet\tools;$env:PATH"
+        echo "$env:USERPROFILE\.dotnet\tools" >> $env:GITHUB_PATH
         wix --version
-        
-        # Also install Visual Studio Build Tools (includes MSBuild) for compatibility
-        choco install visualstudio2022buildtools --package-parameters "--includeRecommended --includeOptional --quiet --wait" -y
+
+    - name: Setup MSBuild
+      uses: microsoft/setup-msbuild@v2
     
     - name: Setup MSVC
       uses: ilammy/msvc-dev-cmd@v1
@@ -654,7 +659,7 @@ jobs:
   build-macos-dev:
     name: macOS Development Build
     needs: setup-version
-    runs-on: macos-latest
+    runs-on: macos-14
     if: needs.setup-version.outputs.should_build == 'true'
     
     steps:
@@ -716,6 +721,8 @@ jobs:
     - name: Package macOS Development Build
       env:
         VERSION: ${{ needs.setup-version.outputs.version }}
+        QMAKE_CXXFLAGS: "-Wno-implicit-function-declaration -Wno-error=implicit-function-declaration"
+        QMAKE_CFLAGS: "-Wno-implicit-function-declaration -Wno-error=implicit-function-declaration"
       run: |
         # Install create-dmg if not available
         if ! command -v create-dmg &> /dev/null; then
@@ -724,80 +731,30 @@ jobs:
         fi
         
         # Use the DMG generation script to create universal DMG
-        # Ensure version is available for DMG naming
         echo "$VERSION" > app/version.txt
         
         # Run DMG generation with error handling
-        DMG_OUTPUT="Artemis-${VERSION}.dmg"
         if ! ./scripts/generate-dmg.sh Release "$VERSION"; then
-          echo "DMG generation failed, checking for common issues..."
+          echo "generate-dmg.sh failed, attempting reliable hdiutil fallback..."
           
-          # Check if create-dmg is available
-          create-dmg --help || echo "create-dmg not properly installed"
+          APP_PATH="build/build-Release/app/Artemis.app"
+          DMG_PATH="build/installer-Release/Artemis-${VERSION}.dmg"
           
-          # List what was actually created
-          echo "Contents of build directory:"
-          find build -name "*.dmg" -o -name "*.app" -o -name "Artemis*" | head -20
-          
-          # Try a simpler fallback DMG creation with proper .dmg extension
-          echo "Attempting fallback DMG creation..."
-          
-          if [ -d "build/build-Release" ]; then
-            # Use create-dmg directly with correct argument order
-            echo "Found Artemis.app at app/Artemis.app"
-            mkdir -p build/installer-Release
-            # Simple approach using hdiutil which is more reliable
-            if [ -d "app/Artemis.app" ]; then
-              echo "Creating DMG with hdiutil..."
-              hdiutil create -srcfolder app/Artemis.app -volname "Artemis" "build/installer-Release/Artemis-${VERSION}.dmg" || {
-                echo "hdiutil failed, trying create-dmg with minimal options..."
-                create-dmg \
-                  --volname "Artemis" \
-                  --no-internet-enable \
-                  --app-drop-link 350 185 \
-                  "build/installer-Release/Artemis-${VERSION}.dmg" \
-                  "app/" || exit 1
-              }
-            else
-              echo "Error: No Artemis.app found in app/ directory"
-              exit 1
-            fi
-            cd build/build-Release
-            # Look for the app bundle in the most likely locations
-            if [ -d "app/Artemis.app" ]; then
-              echo "Found Artemis.app at app/Artemis.app"
-              # Create a simple DMG manually with proper filename
-              mkdir -p ../installer-Release
-              create-dmg --volname "Artemis-$VERSION" \
-                --icon-size 80 \
-                --icon "app/Artemis.app" 200 190 \
-                --hide-extension "app/Artemis.app" \
-                --app-drop-link 400 185 \
-                "../installer-Release/Artemis-$VERSION.dmg" \
-                "app/Artemis.app"
-              cd ../..
-            elif [ -d "Artemis.app" ]; then
-              echo "Found Artemis.app at root level"
-              # Create a simple DMG manually with proper filename
-              mkdir -p ../installer-Release
-              create-dmg --volname "Artemis-$VERSION" \
-                --icon-size 80 \
-                --icon "Artemis.app" 200 190 \
-                --hide-extension "Artemis.app" \
-                --app-drop-link 400 185 \
-                "../installer-Release/Artemis-$VERSION.dmg" \
-                "Artemis.app"
-              cd ../..
-            else
-              echo "ERROR: Artemis.app not found in build/build-Release"
-              echo "Available directories in build/build-Release:"
-              find . -name "*.app" -type d | head -10
-              exit 1
-            fi
-          else
-            echo "ERROR: build/build-Release directory not found"
+          if [ ! -d "$APP_PATH" ]; then
+            echo "Error: Artemis.app not found at $APP_PATH"
+            find build -name "*.app" -type d -print
             exit 1
           fi
+          
+          mkdir -p build/installer-Release
+          
+          echo "Creating DMG with hdiutil directly from $APP_PATH..."
+          hdiutil create \
+            -srcfolder "$APP_PATH" \
+            -volname "Artemis" \
+            -ov \
+            -format UDZO \
+            "$DMG_PATH"
         fi
     
     - name: Upload macOS Universal DMG
