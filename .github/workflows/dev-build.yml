@@ -1681,10 +1681,10 @@ jobs:
             build-commands:
               - install -d /app/lib/GL # Workaround for NVIDIA driver issue
               # Create extension mount directories for hardware acceleration
-              - install -d /app/lib/gl-default
-              - install -d /app/lib/gl-nvidia
-              - install -d /app/lib/vaapi-intel
-              - install -d /app/lib/vaapi-amd
+              - install -d /app/gl-default
+              - install -d /app/gl-nvidia
+              - install -d /app/vaapi-intel
+              - install -d /app/vaapi-amd
               - rm -f .qmake.stash .qmake.cache
               - find . -name "Makefile*" -delete || true
               - rm -rf AntiHooking/ || true
